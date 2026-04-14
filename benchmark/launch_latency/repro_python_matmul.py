@@ -3,8 +3,6 @@ import dataclasses
 import os
 from collections.abc import Callable
 
-os.environ.setdefault("TRITON_RUNNER_ENABLE_TVM_FFI", "1")
-
 import torch
 import triton
 

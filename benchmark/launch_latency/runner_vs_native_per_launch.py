@@ -258,7 +258,7 @@ def main() -> None:
     print(f"scenario: {case.name}")
     if config is not None:
         print(f"problem: A=({args.m}, {args.k}) B=({args.k}, {args.n}) C=({args.m}, {args.n}) variant={config.variant}")
-    print(f"runner env: production={os.environ.get('TRITON_RUNNER_PRODUCTION', '0')} tvm_ffi={os.environ.get('TRITON_RUNNER_ENABLE_TVM_FFI', '0')}")
+    print(f"runner env: production={os.environ.get('TRITON_RUNNER_PROD', '0')}")
     print(f"measure: host launch latency via kernel[grid](), median over {args.repeats} repeats")
     print(f"native Triton: {native_us:.3f} us/launch")
     print(f"triton_runner: {runner_us:.3f} us/launch")

@@ -32,16 +32,12 @@ Results:
 
 import argparse
 import dataclasses
-import json
 import os
 from collections.abc import Callable
 from pathlib import Path
 
-os.environ.setdefault("TRITON_RUNNER_ENABLE_TVM_FFI", "1")
-
 import torch
 import triton
-from triton.runtime import driver
 
 from triton_runner.bench.matmul.arch import (
     ArchConfig, SCALAR_BLOCKS, DOT_BLOCKS, TMA_BLOCKS,
@@ -81,15 +77,7 @@ def _resolve_arch_config() -> tuple[int, Path, ArchConfig]:
 
 def _make_tvm_ffi_kernel(cubin_dir: Path) -> CompiledTVMFFIKernel:
     cubin_path = _only_file(cubin_dir, "*.cubin")
-    json_path = _only_file(cubin_dir, "*.json")
-    cubin_bytes = cubin_path.read_bytes()
-    metadata = json.loads(json_path.read_text())
-    device = driver.active.get_current_device()
-    module, function, n_regs, n_spills, n_max_threads = driver.active.utils.load_binary(
-        metadata["name"], cubin_bytes, metadata.get("shared", 0), device
-    )
-    del module  # keep module alive indirectly via function
-    return CompiledTVMFFIKernel(function, metadata)
+    return CompiledTVMFFIKernel.from_cubin(cubin_path)
 
 
 @dataclasses.dataclass(frozen=True)
