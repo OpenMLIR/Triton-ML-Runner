@@ -1229,7 +1229,7 @@ inline void LaunchPackedImpl(int64_t registry_handle,
       device.device_id,
       static_cast<size_t>(grid_x) * static_cast<size_t>(grid_y) * static_cast<size_t>(grid_z) *
           kernel->profile_scratch_size,
-      kernel->global_scratch_align);
+      kernel->profile_scratch_align);
 
   push_launch(&global_scratch);
   push_launch(&profile_scratch);
