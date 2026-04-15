@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from triton.runtime import _allocation
 from triton.runtime.cache import get_cache_manager
+
 from ._cuda_build import build_module_from_src, cuda_include_dirs, library_dirs
 
 _GENERIC_LAUNCHER_NAME = "triton_runner_tvm_ffi_generic_launcher"
@@ -259,6 +261,11 @@ class TvmFfiLauncher:
             original_runtime_entries, metadata_dict
         )
 
+        self._global_scratch_size = int(metadata_dict.get("global_scratch_size", 0))
+        self._global_scratch_align = int(metadata_dict.get("global_scratch_align", 1))
+        self._profile_scratch_size = int(metadata_dict.get("profile_scratch_size", 0))
+        self._profile_scratch_align = int(metadata_dict.get("profile_scratch_align", 1))
+
         launcher_cache_key, self._tvm_mod = _get_or_build_generic_launcher_module()
 
         artifact = _CompiledArtifact(
@@ -315,7 +322,25 @@ class TvmFfiLauncher:
     def __call__(self, gridX, gridY, gridZ, stream, function, packed_metadata, launch_metadata, launch_enter_hook, launch_exit_hook, *bound_args):
         self.launch(gridX, gridY, gridZ, *bound_args)
 
-    def launch(self, gridX, gridY, gridZ, *args):
+    def launch(self, gridX, gridY, gridZ, *args, stream=None):
+        from triton.runtime import driver
+        if stream is None:
+            device = driver.active.get_current_device()
+            stream = driver.active.get_current_stream(device)
         if self._tensordesc_expansion_info:
             args, _keepalive = self._expand_tensordesc_args(args)
-        self._launch_bound_args_for_tvm_ffi(gridX, gridY, gridZ, *args)
+        grid_size = gridX * gridY * gridZ
+        global_scratch = 0
+        profile_scratch = 0
+        keepalive = []
+        if self._global_scratch_size > 0:
+            alloc_size = grid_size * self._global_scratch_size
+            buf = _allocation._allocator(alloc_size, self._global_scratch_align, stream)
+            global_scratch = buf.data_ptr()
+            keepalive.append(buf)
+        if self._profile_scratch_size > 0:
+            alloc_size = grid_size * self._profile_scratch_size
+            buf = _allocation._allocator(alloc_size, self._profile_scratch_align, stream)
+            profile_scratch = buf.data_ptr()
+            keepalive.append(buf)
+        self._launch_bound_args_for_tvm_ffi(gridX, gridY, gridZ, stream, *args, global_scratch, profile_scratch)

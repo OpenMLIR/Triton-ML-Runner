@@ -117,9 +117,8 @@ class ProdJITFunction(JITFunction[KernelInterface[T]]):
             grid_1 = grid[1] if grid_size > 1 else 1
             grid_2 = grid[2] if grid_size > 2 else 1
             # launch kernel via TVM-FFI
-            tvm_kernel.run(grid_0, grid_1, grid_2,
-                           knobs.runtime.launch_enter_hook, knobs.runtime.launch_exit_hook,
-                           *bound_args.values())
+            tvm_kernel.launch(grid_0, grid_1, grid_2,
+                              *bound_args.values(), stream=stream)
         return kernel
 
 
