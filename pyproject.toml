@@ -27,7 +27,7 @@ include-package-data = true
 
 [project.optional-dependencies]
 tvm-ffi = [
-    "apache-tvm-ffi",
+    "apache-tvm-ffi==0.1.11",
 ]
 
 [tool.setuptools.package-data]
