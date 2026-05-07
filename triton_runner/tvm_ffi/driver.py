@@ -199,7 +199,8 @@ def _get_or_build_generic_launcher_module() -> tuple[str, Any]:
     )
 
     module_name = f"{_GENERIC_LAUNCHER_NAME}_{cache_key[:12]}"
-    cache_manager = get_cache_manager(f"tvm_ffi_generic_launcher_{cache_key}")
+    triton_cache_key = hashlib.sha256(f"tvm_ffi_generic_launcher_{cache_key}".encode("utf-8")).hexdigest()
+    cache_manager = get_cache_manager(triton_cache_key)
     build_dir = Path(cache_manager.cache_dir)
     lib_path = cache_manager.get_file(_shared_library_path("", module_name).name)
 

@@ -2,7 +2,6 @@ from typing import Callable, Dict, Iterable, Optional, Union, overload
 
 from triton.runtime.jit import JITFunction, KernelInterface, T
 from triton.runtime.jit import compute_cache_key
-from triton.runtime.jit import find_paths_if, get_iterable_path
 from triton.runtime import driver
 from triton import knobs
 from collections import defaultdict
@@ -19,10 +18,10 @@ def track_kernel_cache_dir(kernel, name):
     cache_dir = get_cache_manager(kernel.hash).cache_dir
     old_num = len(_kernel_cache_dirs[name])
     _kernel_cache_dirs[name].add(cache_dir)
-    if old_num > 0 and old_num != len(_kernel_cache_dirs[name]):
-        red_print(f"[ProdJIT] {name} has multiple cache dirs: {_kernel_cache_dirs[name]}")
-    # else:
-    #     blue_print(f"[ProdJIT] {name} compiled → {cache_dir}")
+    if old_num != len(_kernel_cache_dirs[name]):
+        blue_print(f"[ProdJIT] {name} cache dir: {cache_dir}")
+        if old_num > 0:
+            red_print(f"[ProdJIT] {name} has multiple cache dirs: {_kernel_cache_dirs[name]}")
 
 
 def update_kernel_metadata(kernel, bound_args, specialization):
@@ -73,16 +72,33 @@ class ProdJITFunction(JITFunction[KernelInterface[T]]):
             specialization.append(f'("custom_pipeline", {inspect_stages_hash})')
 
         key = compute_cache_key(kernel_key_cache, specialization, options)
+        tvm_key = key + "_tvm"
         kernel = kernel_cache.get(key, None)
 
         # Kernel is not cached; we have to compile.
         if kernel is None:
             options, signature, constexprs, attrs = self._pack_args(backend, kwargs, bound_args, specialization,
                                                                     options)
+            object.__setattr__(options, "tvm", True)
 
             kernel = self._do_compile(key, signature, device, constexprs, options, attrs, warmup)
             if kernel is None:
                 return None
+
+        if hasattr(kernel, "result"):
+            kernel = kernel.result()
+            kernel_cache[key] = kernel
+
+        tvm_kernel = kernel_cache.get(tvm_key, None)
+        if tvm_kernel is None:
+            kernel._init_handles()
+            runner_metadata = update_kernel_metadata(kernel, bound_args, specialization)
+            tvm_kernel = CompiledTVMFFIKernel(kernel.function, runner_metadata)
+            tvm_kernel._get_launcher()
+            kernel_cache[tvm_key] = tvm_kernel
+
+        if TRITON_RUNNER_PROD_TEST:
+            track_kernel_cache_dir(kernel, self.__name__)
 
         # Check that used global values have not changed.
         not_present = object()
@@ -100,10 +116,10 @@ class ProdJITFunction(JITFunction[KernelInterface[T]]):
             grid_0 = grid[0]
             grid_1 = grid[1] if grid_size > 1 else 1
             grid_2 = grid[2] if grid_size > 2 else 1
-            # launch kernel
-            launch_metadata = kernel.launch_metadata(grid, stream, *bound_args.values())
-            kernel.run(grid_0, grid_1, grid_2, stream, kernel.function, kernel.packed_metadata, launch_metadata,
-                       knobs.runtime.launch_enter_hook, knobs.runtime.launch_exit_hook, *bound_args.values())
+            # launch kernel via TVM-FFI
+            tvm_kernel.run(grid_0, grid_1, grid_2,
+                           knobs.runtime.launch_enter_hook, knobs.runtime.launch_exit_hook,
+                           *bound_args.values())
         return kernel
 
 
