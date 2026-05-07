@@ -7,6 +7,14 @@ from triton.runtime.driver import driver
 from triton.runtime.jit import JITFunction, KernelInterface, T
 
 from ..compiler.compile import native_compile
+from ..compiler.runner_sm import (
+    RUNNER_SM_KWARG,
+    kwargs_with_runner_sm_arch,
+    native_compile_with_runner_sm,
+    normalize_runner_sm,
+    target_backend_with_runner_sm,
+    target_with_runner_sm,
+)
 from ..compiler.source_types import RUNNER_SOURCE_TYPES
 from ..compat.triton import get_triton_cache_dir
 from .dump import DumpMixin
@@ -379,6 +387,7 @@ class RunnerJITFunctionV3_4_0(RunnerJITFunction[KernelInterface[T]]):
         from triton import knobs
         self.handle_autotune(kwargs)
         self.normalize_runner_kwargs(kwargs)
+        runner_sm = normalize_runner_sm(kwargs.pop(RUNNER_SM_KWARG, None))
 
         kwargs["debug"] = kwargs.get("debug", self.debug) or knobs.runtime.debug
 
@@ -389,30 +398,37 @@ class RunnerJITFunctionV3_4_0(RunnerJITFunction[KernelInterface[T]]):
             hook(*args, **kwargs)
 
         kernel_cache, target, backend, binder = self.device_caches[device]
+        compile_target, compile_backend = target_backend_with_runner_sm(target, backend, runner_sm)
         bound_args, specialization, options = binder(*args, **kwargs)
 
         key = str(specialization) + str(options)
         # [Triton Runner] dump key
         key = self.get_cache_key_with_runner_args(key, kwargs)
+        if runner_sm is not None:
+            key += f"|runner_sm={runner_sm}"
         kernel = kernel_cache.get(key, None)
 
         if kernel is None:
+            compile_kwargs = kwargs if runner_sm is None else kwargs_with_runner_sm_arch({**kwargs, RUNNER_SM_KWARG: runner_sm})
             options, signature, constexprs, attrs, source_dir_type = self._pack_args(
-                backend, kwargs, bound_args, specialization, options)
+                compile_backend, compile_kwargs, bound_args, specialization, options)
 
             # [Triton Runner] dump before _call_hook
-            src = self.get_src_and_save_dump_file(kwargs, source_dir_type, signature, constexprs, attrs, target, options, bound_args)
+            src = self.get_src_and_save_dump_file(compile_kwargs, source_dir_type, signature, constexprs, attrs, compile_target, options, bound_args)
             if self._call_hook(knobs.runtime.jit_cache_hook, key, signature, device, constexprs, options, [attrs], warmup):
                 return None
             ast_src = self.ASTSource(self, signature, constexprs, attrs)
             # [Triton Runner] dump after _call_hook
-            src, metadata_json = self.get_src_and_metadata_json(kwargs, source_dir_type, src, ast_src)
+            src, metadata_json = self.get_src_and_metadata_json(compile_kwargs, source_dir_type, src, ast_src)
             kernel_signature = tuple((key, arg_type, spec) for key, (arg_type, spec) in zip(bound_args.keys(), specialization))
-            kernel = native_compile(src, ast_src, metadata_json, target=target, options=options.__dict__, source_path=self.source_path, kernel_signature=kernel_signature, start_pass=kwargs.get("start_pass"))
+            kernel = native_compile_with_runner_sm(src, ast_src, metadata_json, target=compile_target, options=options.__dict__, source_path=self.source_path, kernel_signature=kernel_signature, start_pass=kwargs.get("start_pass"), runner_sm=runner_sm)
             kernel_cache[key] = kernel
             self._call_hook(knobs.runtime.jit_post_compile_hook, key, signature, device, constexprs, options, [attrs], warmup)
 
         self._check_globals()
+
+        if runner_sm is not None:
+            return kernel
 
         if not warmup:
             assert grid is not None
@@ -595,6 +611,7 @@ class RunnerJITFunctionV3_1_0(RunnerJITFunction[KernelInterface[T]]):
 
     def run(self, *args, grid, warmup, **kwargs):
         self.normalize_runner_kwargs(kwargs)
+        runner_sm = normalize_runner_sm(kwargs.pop(RUNNER_SM_KWARG, None))
         device = driver.active.get_current_device()
         stream = driver.active.get_current_stream(device)
         kwargs["debug"] = self.debug
@@ -608,12 +625,15 @@ class RunnerJITFunctionV3_1_0(RunnerJITFunction[KernelInterface[T]]):
         bound_args, sig_and_spec, constexpr_vals, non_constexpr_vals, excess_kwargs = self.binder(*args, **kwargs)
 
         key = ''.join(sig_and_spec) + str((constexpr_vals, excess_kwargs))
+        if runner_sm is not None:
+            key += f"|runner_sm={runner_sm}"
         kernel = self.cache[device].get(key, None)
 
         if kernel is None:
-            target = driver.active.get_current_target()
+            target = target_with_runner_sm(driver.active.get_current_target(), runner_sm)
             backend = self.make_backend(target)
-            options = backend.parse_options(kwargs)
+            compile_kwargs = kwargs if runner_sm is None else kwargs_with_runner_sm_arch({**kwargs, RUNNER_SM_KWARG: runner_sm})
+            options = backend.parse_options(compile_kwargs)
 
             assert "device_type" not in kwargs, "device_type option is deprecated; current target will be used"
             assert "device" not in kwargs, "device option is deprecated; current device will be used"
@@ -640,8 +660,8 @@ class RunnerJITFunctionV3_1_0(RunnerJITFunction[KernelInterface[T]]):
             if self._call_hook(key, signature, device, constants, options, configs):
                 return None
             ast_src = self.ASTSource(self, signature, constants, configs[0])
-            src, metadata_json = self.get_src_and_metadata_json(kwargs, source_dir_type, None, ast_src)
-            kernel = native_compile(src, ast_src, metadata_json, target=target, options=options.__dict__, source_path=self.source_path)
+            src, metadata_json = self.get_src_and_metadata_json(compile_kwargs, source_dir_type, None, ast_src)
+            kernel = native_compile_with_runner_sm(src, ast_src, metadata_json, target=target, options=options.__dict__, source_path=self.source_path, runner_sm=runner_sm)
             self.cache[device][key] = kernel
 
         # Check that used global values have not changed.
@@ -650,6 +670,9 @@ class RunnerJITFunctionV3_1_0(RunnerJITFunction[KernelInterface[T]]):
             if (newVal := globals_dict.get(name, not_present)) != val:
                 raise RuntimeError(
                     f"Global variable {name} has changed since we compiled this kernel, from {val} to {newVal}")
+
+        if runner_sm is not None:
+            return kernel
 
         if not warmup:
             assert grid is not None
