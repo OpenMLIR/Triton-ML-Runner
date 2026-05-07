@@ -1,7 +1,8 @@
+from typing import Callable, Dict, Iterable, Optional, Union, overload
+
 from triton.runtime.jit import JITFunction, KernelInterface, T
 from triton.runtime.jit import compute_cache_key
 from triton.runtime.jit import find_paths_if, get_iterable_path
-from triton.runtime.jit import Dict, Optional, Callable, Iterable, Union, overload
 from triton.runtime import driver
 from triton import knobs
 from collections import defaultdict

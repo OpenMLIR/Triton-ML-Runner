@@ -15,9 +15,11 @@ def _env_flag(name, default=True):
 
 def _init_is_cuda():
     from triton.runtime import driver
-    from triton.backends.compiler import GPUTarget
-    target = driver.active.get_current_target()
-    return isinstance(target, GPUTarget) and target.backend == "cuda"
+    try:
+        target = driver.active.get_current_target()
+    except Exception:
+        return False
+    return getattr(target, "backend", None) == "cuda"
 
 
 IS_CUDA = _init_is_cuda()
