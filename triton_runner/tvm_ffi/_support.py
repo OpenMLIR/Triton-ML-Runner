@@ -268,11 +268,7 @@ def _expand_tensordesc_registration_specs(
             for i in range(rank):
                 expanded.append({"name": f"{name}_stride2_{i}", "kind": "i64"})
         else:
-            expanded.append({"name": name, "kind": "nvTmaDesc"})
-            for i in range(rank):
-                expanded.append({"name": f"{name}_shape_{i}", "kind": "i32"})
-            for i in range(rank):
-                expanded.append({"name": f"{name}_stride_{i}", "kind": "i64"})
+            expanded.append(spec)
     return expanded
 
 
@@ -306,11 +302,12 @@ def _expand_tensordesc_signature(
             for i in range(rank):
                 expanded.append(_SignatureEntry(f"{entry.name}_stride2_{i}", "i64", entry.specialization, entry.is_kwargs))
         else:
-            expanded.append(_SignatureEntry(entry.name, "nvTmaDesc", entry.specialization, entry.is_kwargs))
+            expanded.append(_SignatureEntry(f"{entry.name}_base", "*", entry.specialization, entry.is_kwargs))
             for i in range(rank):
-                expanded.append(_SignatureEntry(f"{entry.name}_shape_{i}", "i32", entry.specialization, entry.is_kwargs))
+                expanded.append(_SignatureEntry(f"{entry.name}_shape_{i}", "i64", entry.specialization, entry.is_kwargs))
             for i in range(rank):
                 expanded.append(_SignatureEntry(f"{entry.name}_stride_{i}", "i64", entry.specialization, entry.is_kwargs))
+            expanded.append(_SignatureEntry(f"{entry.name}_padding_nan", "i1", entry.specialization, entry.is_kwargs))
     return tuple(expanded)
 
 
