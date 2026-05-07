@@ -1,6 +1,6 @@
 __version__ = '0.3.8'
 
-from .compat.version import is_support_version, is_triton_v3_4, triton_version
+from .compat.version import is_support_version, is_triton_v3_7, triton_version
 if not is_support_version:
     raise RuntimeError(f"Triton Runner doesn't support Triton v{triton_version}")
 
@@ -30,7 +30,7 @@ from .compat.version import is_triton_geq_v3_4
 if is_triton_geq_v3_4:
     from .runtime.autotune import autotune
 
-if TRITON_RUNNER_PROD and IS_CUDA and is_triton_v3_4:
+if TRITON_RUNNER_PROD and IS_CUDA and is_triton_v3_7:
     from .tvm_ffi import _require_tvm_ffi
     _require_tvm_ffi()
     from .jit.prod import jit
