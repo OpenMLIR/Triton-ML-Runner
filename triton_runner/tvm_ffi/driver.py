@@ -323,6 +323,12 @@ class TvmFfiLauncher:
         self.launch(gridX, gridY, gridZ, *bound_args)
 
     def launch(self, gridX, gridY, gridZ, *args, stream=None):
+        if (stream is not None
+                and not self._tensordesc_expansion_info
+                and self._global_scratch_size == 0
+                and self._profile_scratch_size == 0):
+            self._launch_bound_args_for_tvm_ffi(gridX, gridY, gridZ, stream, *args, 0, 0)
+            return
         from triton.runtime import driver
         if stream is None:
             device = driver.active.get_current_device()
