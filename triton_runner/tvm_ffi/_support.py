@@ -171,11 +171,13 @@ def _parse_tensordesc_specs(
                     raise ValueError(
                         f"Tensor descriptor metadata for {entry.name} has block_size rank {len(block_size)}, expected {rank}."
                     )
-                elem_type = int(raw_item["elem_type"])
+                # Store the raw device-side elem_type; the device→host mapping is
+                # applied once at fill_tma_descriptor_tiled call site (matches
+                # triton.backends.nvidia.driver.make_tensordesc_arg).
                 spec_metadata = {
                     "swizzle": int(raw_item["swizzle"]),
                     "elem_size": int(raw_item["elem_size"]),
-                    "elem_type": int(_TMA_DTYPE_DEVICE_TO_HOST.get(elem_type, elem_type)),
+                    "elem_type": int(raw_item["elem_type"]),
                     "block_size": block_size,
                     "fp4_padded": bool(raw_item.get("fp4_padded", False)),
                 }
