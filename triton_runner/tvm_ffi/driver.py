@@ -300,19 +300,44 @@ class TvmFfiLauncher:
             base = arg.base
             shape = list(arg.shape)
             stride = list(arg.strides)
-            padding_nan = False
-            if hasattr(arg, "padding"):
-                padding = arg.padding
-                if padding == "nan":
-                    padding_nan = True
-            expanded = [
-                base,
-                *shape,
-                *stride,
-                padding_nan,
-            ]
             if meta is None:
-                expanded.extend([*shape, *stride])
+                padding_nan = bool(getattr(arg, "padding", None) == "nan")
+                expanded = [base, *shape, *stride, padding_nan, *shape, *stride]
+            else:
+                # TMA path: build a CUtensorMap descriptor and pass its in-memory
+                # 128-byte struct by value (kernel param is .align 64 .b8 desc[128]).
+                # Matches triton.backends.nvidia.driver.make_tensordesc_arg.
+                from triton.backends.nvidia.driver import TMA_DTYPE_DEVICE_TO_HOST, TMA_TF32
+                import triton as _triton
+
+                elem_type = meta["elem_type"]
+                if getattr(arg, "round_f32_to_tf32", False):
+                    elem_type = TMA_TF32
+                expanded_shape = list(shape)
+                if meta.get("fp4_padded"):
+                    expanded_shape[-1] *= 2
+                padding = 1 if getattr(arg, "padding", None) == "nan" else 0
+
+                cu_tensor_map = _triton.runtime.driver.active.utils.fill_tma_descriptor_tiled(
+                    base.data_ptr(),
+                    meta["swizzle"],
+                    meta["elem_size"],
+                    TMA_DTYPE_DEVICE_TO_HOST[elem_type],
+                    meta["block_size"],
+                    expanded_shape,
+                    stride,
+                    padding,
+                )
+                # PyCUtensorMapObject layout: PyObject_HEAD then a 128-aligned
+                # CUtensorMap field at the tail. Compute its offset from
+                # tp_basicsize so we don't hard-code the alignment padding.
+                desc_offset = type(cu_tensor_map).__basicsize__ - 128
+                desc_addr = id(cu_tensor_map) + desc_offset
+                # Hold the Python descriptor object alive for the duration of
+                # the launch — cuLaunchKernel copies the 128 bytes synchronously
+                # before returning, so dropping it after launch is safe.
+                keepalive.append(cu_tensor_map)
+                expanded = [desc_addr, *shape, *stride]
             args_list[runtime_idx:runtime_idx + 1] = expanded
         return tuple(args_list), keepalive
 

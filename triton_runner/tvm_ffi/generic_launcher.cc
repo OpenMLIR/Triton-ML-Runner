@@ -602,9 +602,12 @@ inline void LaunchPackedImpl(int64_t registry_handle,
         TVM_FFI_CHECK(arg_index < static_cast<size_t>(num_args), ValueError)
             << "Missing runtime argument for " << spec.name;
         int64_t ptr_val = get_arg(static_cast<int64_t>(arg_index++)).template cast<int64_t>();
-        KernelArgSlot& slot = push_slot();
-        slot.ptr = reinterpret_cast<void*>(static_cast<uintptr_t>(ptr_val));
-        push_launch(&slot.ptr);
+        // The kernel parameter for a CUtensorMap is declared as
+        //   .param .align 64 .b8 desc[128]
+        // so cuLaunchKernel reads 128 bytes by value from launch_args[i].
+        // launch_args[i] must therefore point directly at the descriptor's 128
+        // bytes — not at an 8-byte slot containing the ptr.
+        push_launch(reinterpret_cast<void*>(static_cast<uintptr_t>(ptr_val)));
         break;
       }
       case ArgKind::kTensorDesc: {

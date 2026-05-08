@@ -268,7 +268,13 @@ def _expand_tensordesc_registration_specs(
             for i in range(rank):
                 expanded.append({"name": f"{name}_stride2_{i}", "kind": "i64"})
         else:
-            expanded.append(spec)
+            # TMA path: kernel ABI is [CUtensorMap (128B by value), shape*i64, stride*i64].
+            # Match what triton.backends.nvidia.driver.make_tensordesc_arg produces.
+            expanded.append({"name": f"{name}_tma", "kind": "nvTmaDesc"})
+            for i in range(rank):
+                expanded.append({"name": f"{name}_shape_{i}", "kind": "i64"})
+            for i in range(rank):
+                expanded.append({"name": f"{name}_stride_{i}", "kind": "i64"})
     return expanded
 
 
@@ -302,12 +308,13 @@ def _expand_tensordesc_signature(
             for i in range(rank):
                 expanded.append(_SignatureEntry(f"{entry.name}_stride2_{i}", "i64", entry.specialization, entry.is_kwargs))
         else:
-            expanded.append(_SignatureEntry(f"{entry.name}_base", "*", entry.specialization, entry.is_kwargs))
+            # TMA path — must match _expand_tensordesc_registration_specs above
+            # so the C launcher's argument plan agrees with the kernel ABI.
+            expanded.append(_SignatureEntry(f"{entry.name}_tma", "nvTmaDesc", entry.specialization, entry.is_kwargs))
             for i in range(rank):
                 expanded.append(_SignatureEntry(f"{entry.name}_shape_{i}", "i64", entry.specialization, entry.is_kwargs))
             for i in range(rank):
                 expanded.append(_SignatureEntry(f"{entry.name}_stride_{i}", "i64", entry.specialization, entry.is_kwargs))
-            expanded.append(_SignatureEntry(f"{entry.name}_padding_nan", "i1", entry.specialization, entry.is_kwargs))
     return tuple(expanded)
 
 
