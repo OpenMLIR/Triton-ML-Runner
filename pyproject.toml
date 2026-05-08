@@ -8,7 +8,7 @@ dependencies = [
 ]
 
 readme = "README.md"
-version = "0.3.7"
+version = "0.3.8"
 authors = [
     { name = "Bob Huang", email = "x@bobhuang.xyz" },
 ]
@@ -27,7 +27,7 @@ include-package-data = true
 
 [project.optional-dependencies]
 tvm-ffi = [
-    "apache-tvm-ffi",
+    "apache-tvm-ffi==0.1.11",
 ]
 
 [tool.setuptools.package-data]

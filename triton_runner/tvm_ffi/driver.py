@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import threading
 from pathlib import Path
 from typing import Any
 
@@ -199,7 +198,8 @@ def _get_or_build_generic_launcher_module() -> tuple[str, Any]:
     )
 
     module_name = f"{_GENERIC_LAUNCHER_NAME}_{cache_key[:12]}"
-    cache_manager = get_cache_manager(f"tvm_ffi_generic_launcher_{cache_key}")
+    triton_cache_key = hashlib.sha256(f"tvm_ffi_generic_launcher_{cache_key}".encode("utf-8")).hexdigest()
+    cache_manager = get_cache_manager(triton_cache_key)
     build_dir = Path(cache_manager.cache_dir)
     lib_path = cache_manager.get_file(_shared_library_path("", module_name).name)
 
@@ -259,9 +259,6 @@ class TvmFfiLauncher:
             original_runtime_entries, metadata_dict
         )
 
-        self._tma_desc_cache: dict[int, dict[tuple[tuple[int, ...], tuple[int, ...]], Any]] = {}
-        self._tma_cache_lock = threading.Lock()
-
         launcher_cache_key, self._tvm_mod = _get_or_build_generic_launcher_module()
 
         artifact = _CompiledArtifact(
@@ -285,38 +282,6 @@ class TvmFfiLauncher:
             tvm_mod=self._tvm_mod,
         )
 
-    def _get_tma_desc(self, runtime_idx: int, arg: Any, meta: dict[str, Any]) -> Any:
-        import torch
-        from triton.backends.nvidia.driver import TMA_DTYPE_DEVICE_TO_HOST
-        shape_tuple = tuple(arg.shape)
-        stride_tuple = tuple(arg.strides)
-        cache_key = (shape_tuple, stride_tuple)
-        with self._tma_cache_lock:
-            slot_cache = self._tma_desc_cache.get(runtime_idx)
-            if slot_cache is None:
-                slot_cache = {}
-                self._tma_desc_cache[runtime_idx] = slot_cache
-            desc = slot_cache.get(cache_key)
-            if desc is not None:
-                return desc
-        desc = torch.empty(128, dtype=torch.uint8, device="cpu")
-        shape = list(arg.shape)
-        if meta.get("fp4_padded"):
-            shape[-1] *= 2
-        triton.runtime.driver.active.utils.fill_tma_descriptor(
-            desc.data_ptr(),
-            arg.base.data_ptr(),
-            meta["swizzle"],
-            meta["elem_size"],
-            TMA_DTYPE_DEVICE_TO_HOST[meta["elem_type"]],
-            meta["block_size"],
-            shape,
-            list(arg.strides),
-        )
-        with self._tma_cache_lock:
-            slot_cache[cache_key] = desc
-        return desc
-
     def _expand_tensordesc_args(self, args: tuple[Any, ...]) -> tuple[tuple[Any, ...], list[Any]]:
         expansion_info = self._tensordesc_expansion_info
         if not expansion_info:
@@ -325,27 +290,22 @@ class TvmFfiLauncher:
         keepalive: list[Any] = []
         for runtime_idx, rank, meta in reversed(expansion_info):
             arg = args_list[runtime_idx]
-            if meta is not None:
-                desc = self._get_tma_desc(runtime_idx, arg, meta)
-                expanded = [desc.data_ptr(), *list(arg.shape), *list(arg.strides)]
-                keepalive.append(desc)
-            else:
-                base = arg.base
-                shape = list(arg.shape)
-                stride = list(arg.strides)
-                padding_nan = False
-                if hasattr(arg, "padding"):
-                    padding = arg.padding
-                    if padding == "nan":
-                        padding_nan = True
-                expanded = [
-                    base,
-                    *shape,
-                    *stride,
-                    padding_nan,
-                    *shape,
-                    *stride,
-                ]
+            base = arg.base
+            shape = list(arg.shape)
+            stride = list(arg.strides)
+            padding_nan = False
+            if hasattr(arg, "padding"):
+                padding = arg.padding
+                if padding == "nan":
+                    padding_nan = True
+            expanded = [
+                base,
+                *shape,
+                *stride,
+                padding_nan,
+            ]
+            if meta is None:
+                expanded.extend([*shape, *stride])
             args_list[runtime_idx:runtime_idx + 1] = expanded
         return tuple(args_list), keepalive
 

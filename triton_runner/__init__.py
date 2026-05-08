@@ -1,6 +1,6 @@
-__version__ = '0.3.7'
+__version__ = '0.3.8'
 
-from .compat.version import is_support_version, is_triton_v3_4, triton_version
+from .compat.version import is_support_version, is_triton_v3_7, triton_version
 if not is_support_version:
     raise RuntimeError(f"Triton Runner doesn't support Triton v{triton_version}")
 
@@ -15,9 +15,11 @@ def _env_flag(name, default=True):
 
 def _init_is_cuda():
     from triton.runtime import driver
-    from triton.backends.compiler import GPUTarget
-    target = driver.active.get_current_target()
-    return isinstance(target, GPUTarget) and target.backend == "cuda"
+    try:
+        target = driver.active.get_current_target()
+    except Exception:
+        return False
+    return getattr(target, "backend", None) == "cuda"
 
 
 IS_CUDA = _init_is_cuda()
@@ -30,7 +32,7 @@ from .compat.version import is_triton_geq_v3_4
 if is_triton_geq_v3_4:
     from .runtime.autotune import autotune
 
-if TRITON_RUNNER_PROD and IS_CUDA and is_triton_v3_4:
+if TRITON_RUNNER_PROD and IS_CUDA and is_triton_v3_7:
     from .tvm_ffi import _require_tvm_ffi
     _require_tvm_ffi()
     from .jit.prod import jit
