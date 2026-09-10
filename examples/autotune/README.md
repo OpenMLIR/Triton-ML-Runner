@@ -1,6 +1,6 @@
 摘要：Triton Runner是针对OpenAI/Triton的多层级Runner工具，提供了IR/PTX/cubin的多层级执行。本文是多层级autotune的使用文档。
 
-项目地址：[ToyAIX/triton-runner](https://github.com/toyaix/triton-runner)，另有短域名[triton-runner.org](https://triton-runner.org)方便访问。
+项目地址：[ToyAIX/triton-runner](https://github.com/toyaix/triton-runner)。
 
 这个功能以及示例目前在 main分支，还未发布，请使用源码安装。
 

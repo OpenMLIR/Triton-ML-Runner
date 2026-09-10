@@ -4,8 +4,7 @@
 <a href="./doc/runner.md"><b>Runner Docs</b></a> |
 <a href="./doc/dump.md"><b>Dump Docs</b></a> |
 <a href="./doc/benchmark.md"><b>Benchmark Docs</b></a> |
-<a href="./README.zh.md"><b>中文文档</b></a> |
-<a href="https://triton-runner.org"><b>triton-runner.org</b></a>
+<a href="./README.zh.md"><b>中文文档</b></a>
 </p>
 
 <p align="center">
