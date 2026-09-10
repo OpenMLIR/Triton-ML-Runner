@@ -4,9 +4,10 @@ triton_version = triton.__version__
 _parts = triton_version.split('.')
 _ver = (int(_parts[0]), int(_parts[1]))
 
-# Supported range: 3.0 ~ 3.7 inclusive
-is_support_version = (3, 0) <= _ver <= (3, 7)
+# Supported range: 3.0 ~ 3.8 inclusive
+is_support_version = (3, 0) <= _ver <= (3, 8)
 
+is_triton_v3_8 = _ver == (3, 8)
 is_triton_v3_7 = _ver == (3, 7)
 is_triton_v3_6 = _ver == (3, 6)
 is_triton_v3_5 = _ver == (3, 5)

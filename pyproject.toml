@@ -16,7 +16,7 @@ license = "MIT"
 
 [project.urls]
 repository = "https://github.com/toyaix/triton-runner"
-homepage = "https://triton-runner.org"
+homepage = "https://github.com/toyaix/triton-runner"
 
 [build-system]
 requires = ["setuptools>=61.0"]
