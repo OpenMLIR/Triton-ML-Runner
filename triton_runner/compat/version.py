@@ -38,3 +38,6 @@ try:
     is_tlx = True
 except ImportError:
     is_tlx = False
+
+# fbtriton releases report versions like "3.7.4+fb"; strict patch-level match
+is_tlx_v3_7_4 = is_tlx and triton_version.split("+")[0] == "3.7.4"

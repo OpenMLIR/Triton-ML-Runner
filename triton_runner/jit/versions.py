@@ -168,6 +168,67 @@ class RunnerJITFunction(DumpMixin, MetadataMixin, JITFunction[KernelInterface[T]
         self._call_hook(knobs.runtime.jit_post_compile_hook, key, signature, device, constexprs, options, [attrs], warmup)
         return kernel
 
+    def _do_compile_with_target(self, key, hook_key, signature, target, device, constexprs, options, attrs, warmup,
+                                source_dir_type, kwargs, bound_args, specialization):
+        """Compile path shared by Triton 3.7+/fbtriton, whose _call_hook takes `target`.
+
+        `hook_key` is what the jit hooks receive: the cache key (3.8/fbtriton)
+        or the separate (specialization, options) tuple (3.7).
+        """
+        from triton import knobs
+
+        kernel_signature = tuple(
+            (name, arg_type, spec, name in kwargs)
+            for name, (arg_type, spec) in zip(bound_args.keys(), specialization)
+        )
+        src = self.get_src_and_save_dump_file(
+            kwargs, source_dir_type, signature, constexprs, attrs, target, options, bound_args)
+        if self.need_dump(kwargs):
+            kernel_signature = kernel_signature + (("dump_tensor", "*fp32", "D", False),)
+
+        if JITFunction._call_hook(
+            self,
+            knobs.runtime.jit_cache_hook,
+            hook_key,
+            signature,
+            target,
+            device,
+            constexprs,
+            options,
+            [attrs],
+            warmup,
+        ):
+            return None
+
+        ast_src = self.ASTSource(self, signature, constexprs, attrs)
+        src, metadata_json = self.get_src_and_metadata_json(kwargs, source_dir_type, src, ast_src)
+        kernel = native_compile(
+            src,
+            ast_src,
+            metadata_json,
+            target=target,
+            options=options.__dict__,
+            source_path=self.source_path,
+            kernel_signature=kernel_signature,
+        )
+        if kernel is None:
+            return None
+        kernel_cache, _, _, _, _ = self.device_caches[device]
+        kernel_cache[key] = kernel
+        JITFunction._call_hook(
+            self,
+            knobs.runtime.jit_post_compile_hook,
+            hook_key,
+            signature,
+            target,
+            device,
+            constexprs,
+            options,
+            [attrs],
+            warmup,
+        )
+        return kernel
+
     def _check_globals(self):
         not_present = object()
         for (name, _), (val, globals_dict) in self.used_global_vals.items():
@@ -214,56 +275,11 @@ class RunnerJITFunctionV3_8_0(RunnerJITFunction[KernelInterface[T]]):
         if kernel is None:
             options, signature, constexprs, attrs, source_dir_type = self._pack_args(
                 backend, kwargs, bound_args, specialization, options)
-            kernel_signature = tuple(
-                (name, arg_type, spec, name in kwargs)
-                for name, (arg_type, spec) in zip(bound_args.keys(), specialization)
-            )
-
-            src = self.get_src_and_save_dump_file(
-                kwargs, source_dir_type, signature, constexprs, attrs, target, options, bound_args)
-            if self.need_dump(kwargs):
-                kernel_signature = kernel_signature + (("dump_tensor", "*fp32", "D", False),)
-
-            if JITFunction._call_hook(
-                self,
-                knobs.runtime.jit_cache_hook,
-                key,
-                signature,
-                target,
-                device,
-                constexprs,
-                options,
-                [attrs],
-                warmup,
-            ):
-                return None
-
-            ast_src = self.ASTSource(self, signature, constexprs, attrs)
-            src, metadata_json = self.get_src_and_metadata_json(kwargs, source_dir_type, src, ast_src)
-            kernel = native_compile(
-                src,
-                ast_src,
-                metadata_json,
-                target=target,
-                options=options.__dict__,
-                source_path=self.source_path,
-                kernel_signature=kernel_signature,
-            )
+            kernel = self._do_compile_with_target(
+                key, key, signature, target, device, constexprs, options, attrs, warmup,
+                source_dir_type, kwargs, bound_args, specialization)
             if kernel is None:
                 return None
-            kernel_cache[key] = kernel
-            JITFunction._call_hook(
-                self,
-                knobs.runtime.jit_post_compile_hook,
-                key,
-                signature,
-                target,
-                device,
-                constexprs,
-                options,
-                [attrs],
-                warmup,
-            )
 
         self._check_globals()
 
@@ -310,56 +326,11 @@ class RunnerJITFunctionV3_7_0(RunnerJITFunction[KernelInterface[T]]):
         if kernel is None:
             options, signature, constexprs, attrs, source_dir_type = self._pack_args(
                 backend, kwargs, bound_args, specialization, options)
-            kernel_signature = tuple(
-                (name, arg_type, spec, name in kwargs)
-                for name, (arg_type, spec) in zip(bound_args.keys(), specialization)
-            )
-
-            src = self.get_src_and_save_dump_file(
-                kwargs, source_dir_type, signature, constexprs, attrs, target, options, bound_args)
-            if self.need_dump(kwargs):
-                kernel_signature = kernel_signature + (("dump_tensor", "*fp32", "D", False),)
-
-            if JITFunction._call_hook(
-                self,
-                knobs.runtime.jit_cache_hook,
-                hook_key,
-                signature,
-                target,
-                device,
-                constexprs,
-                options,
-                [attrs],
-                warmup,
-            ):
-                return None
-
-            ast_src = self.ASTSource(self, signature, constexprs, attrs)
-            src, metadata_json = self.get_src_and_metadata_json(kwargs, source_dir_type, src, ast_src)
-            kernel = native_compile(
-                src,
-                ast_src,
-                metadata_json,
-                target=target,
-                options=options.__dict__,
-                source_path=self.source_path,
-                kernel_signature=kernel_signature,
-            )
+            kernel = self._do_compile_with_target(
+                key, hook_key, signature, target, device, constexprs, options, attrs, warmup,
+                source_dir_type, kwargs, bound_args, specialization)
             if kernel is None:
                 return None
-            kernel_cache[key] = kernel
-            JITFunction._call_hook(
-                self,
-                knobs.runtime.jit_post_compile_hook,
-                hook_key,
-                signature,
-                target,
-                device,
-                constexprs,
-                options,
-                [attrs],
-                warmup,
-            )
 
         self._check_globals()
 
@@ -518,14 +489,18 @@ class RunnerJITFunctionV3_4_0(RunnerJITFunction[KernelInterface[T]]):
         return kernel
 
 
-class RunnerJITFunction_TLX(RunnerJITFunction[KernelInterface[T]]):
+class RunnerJITFunction_TLX_V3_7_4(RunnerJITFunction[KernelInterface[T]]):
 
     def run(self, *args, grid, warmup, **kwargs):
+        self.handle_autotune(kwargs)
+        self.normalize_runner_kwargs(kwargs)
         from triton import knobs
         from triton.runtime.jit import compute_cache_key
-        self.normalize_runner_kwargs(kwargs)
 
         kwargs["debug"] = kwargs.get("debug", self.debug) or knobs.runtime.debug
+        kwargs["sanitize_overflow"] = kwargs.get(
+            "sanitize_overflow", False) or knobs.runtime.sanitize_overflow or kwargs["debug"]
+        kwargs["instrumentation_mode"] = knobs.compilation.instrumentation_mode
 
         device = driver.active.get_current_device()
         stream = driver.active.get_current_stream(device)
@@ -536,6 +511,10 @@ class RunnerJITFunction_TLX(RunnerJITFunction[KernelInterface[T]]):
         kernel_cache, kernel_key_cache, target, backend, binder = self.device_caches[device]
         bound_args, specialization, options = binder(*args, **kwargs)
 
+        if knobs.runtime.add_stages_inspection_hook is not None:
+            inspect_stages_key, inspect_stages_hash = knobs.runtime.add_stages_inspection_hook()
+            specialization.append(f'("custom_pipeline", {inspect_stages_hash})')
+
         key = compute_cache_key(kernel_key_cache, specialization, options)
         key = self.get_cache_key_with_runner_args(key, kwargs)
         kernel = kernel_cache.get(key, None)
@@ -543,7 +522,9 @@ class RunnerJITFunction_TLX(RunnerJITFunction[KernelInterface[T]]):
         if kernel is None:
             options, signature, constexprs, attrs, source_dir_type = self._pack_args(
                 backend, kwargs, bound_args, specialization, options)
-            kernel = self._do_compile(key, signature, device, constexprs, options, attrs, warmup, source_dir_type, kwargs)
+            kernel = self._do_compile_with_target(
+                key, key, signature, target, device, constexprs, options, attrs, warmup,
+                source_dir_type, kwargs, bound_args, specialization)
             if kernel is None:
                 return None
 
@@ -554,6 +535,8 @@ class RunnerJITFunction_TLX(RunnerJITFunction[KernelInterface[T]]):
             grid, grid_0, grid_1, grid_2 = self._resolve_grid(grid, bound_args)
             if hasattr(kernel, "result"):
                 kernel = kernel.result()
+            if hasattr(kernel, "_init_handles"):
+                kernel._init_handles()
             launch_metadata = kernel.launch_metadata(grid, stream, *bound_args.values())
             kernel.run(grid_0, grid_1, grid_2, stream, kernel.function, kernel.packed_metadata, launch_metadata,
                        knobs.runtime.launch_enter_hook, knobs.runtime.launch_exit_hook, *bound_args.values())

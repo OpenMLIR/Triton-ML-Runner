@@ -27,7 +27,7 @@ from .source_types import (
     TEXT_FILE_SOURCE_EXTS,
 )
 from ..compat.version import is_triton_v3_4, is_disable_multithreading
-from ..compat.version import is_tlx, is_triton_leq_v3_2, is_triton_leq_v3_1, is_triton_geq_v3_5
+from ..compat.version import is_tlx_v3_7_4, is_triton_leq_v3_2, is_triton_leq_v3_1, is_triton_geq_v3_5
 from ..compat.version import triton_version
 
 
@@ -193,7 +193,7 @@ def native_compile(src, ast_src, metadata_json=dict(), target=None, options=None
 
     # run compilation pipeline and populate metadata
     stages = dict()
-    if is_triton_geq_v3_5 or is_tlx or is_triton_v3_4:
+    if is_triton_geq_v3_5 or is_tlx_v3_7_4 or is_triton_v3_4:
         if not isinstance(src, str):
             backend.add_stages(stages, options, src.language)
         else:
@@ -214,7 +214,7 @@ def native_compile(src, ast_src, metadata_json=dict(), target=None, options=None
     if start_pass and src_ext in ("ttir", "ttgir", "llir"):
         # don't skip the current stage yet — run_from_pass will handle it after module load
         pass
-    elif (ir_source and src_ext != "ttir") or (ir_source and is_tlx):
+    elif (ir_source and src_ext != "ttir") or (ir_source and is_tlx_v3_7_4):
         first_stage += 1
 
     # For IRSource, we have already grabbed the context + called both
@@ -328,7 +328,7 @@ def get_module_with_src_with_make_ir(src, backend, target, options, codegen_fns,
     if is_triton_leq_v3_1:
         return src.make_ir(options, codegen_fns, context)
     module_map = backend.get_module_map()
-    if is_triton_geq_v3_5 or is_tlx:
+    if is_triton_geq_v3_5 or is_tlx_v3_7_4:
         return src.make_ir(target, options, codegen_fns, module_map, context)
     return src.make_ir(options, codegen_fns, module_map, context)
 
@@ -369,9 +369,10 @@ def parse_mlir_to_folder(mlir_path):
     os.makedirs(folder_path, exist_ok=True)
     content = Path(mlir_path).read_text()
 
+    # Upstream MLIR prints "Pass (key) (op)"; fbtriton prints "Pass: key{opts} (op)".
     pattern = re.compile(
         r'// -----// IR Dump Before (?P<pass_name>.*?) '
-        r'\((?P<pass_key>.*?)\) '
+        r'(?:\((?P<pass_key>.*?)\) )?'
         r'\((?P<operation>.*?)\) //----- //\n'
         r'(?P<body>.*?)(?=// -----// IR Dump Before|\Z)',
         re.DOTALL
@@ -382,7 +383,11 @@ def parse_mlir_to_folder(mlir_path):
     idx = -1
     for idx, match in enumerate(pattern.finditer(content)):
         pass_name = match.group("pass_name").strip()
-        pass_key = match.group("pass_key").strip()
+        pass_key = (match.group("pass_key") or "").strip()
+        if not pass_key and ":" in pass_name:
+            # fbtriton "Pass: key{opts}" form
+            pass_name, pass_key = (part.strip() for part in pass_name.split(":", 1))
+            pass_key = pass_key.split("{", 1)[0].strip()
         operation = match.group("operation").strip()
         body = match.group("body").strip()
         changed = "-changed" if last_body and last_body != body else ""
