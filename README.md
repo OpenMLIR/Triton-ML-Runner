@@ -149,7 +149,7 @@ python examples/runner/v3.8.0/ttir/matmul/matmul.py
 
 ### 3. TTGIR Runner
 
-TTGIR is architecture-aware. Provide the matching `.ttgir` file and, when needed, the corresponding metadata JSON. See [examples/runner/v3.8.0/ttgir/sm90/matmul-with-tma-v4.py](./examples/runner/v3.8.0/ttgir/sm90/matmul-with-tma-v4.py).
+TTGIR is architecture-aware. Provide the matching `.ttgir` file and, when needed, the corresponding metadata JSON. See [examples/runner/v3.8.0/ttgir/sm120/matmul-with-tma-v4.py](./examples/runner/v3.8.0/ttgir/sm120/matmul-with-tma-v4.py).
 
 If you hit `torch.AcceleratorError: CUDA error: an illegal instruction was encountered`, the selected TTGIR artifact likely does not match the target GPU, or the metadata JSON is missing.
 
@@ -157,10 +157,10 @@ If you hit `torch.AcceleratorError: CUDA error: an illegal instruction was encou
 
 For LLIR, PTX, and cubin launches, provide the input file plus the matching metadata JSON.
 
-- LLIR example: [examples/runner/v3.8.0/llir/sm90/matmul-with-tma-v4.py](./examples/runner/v3.8.0/llir/sm90/matmul-with-tma-v4.py)
-- PTX example: [examples/runner/v3.8.0/ptx/sm90/matmul-with-tma-v4.py](./examples/runner/v3.8.0/ptx/sm90/matmul-with-tma-v4.py)
-- cubin example: [examples/runner/v3.8.0/cubin/sm90/matmul-with-tma-v4.py](./examples/runner/v3.8.0/cubin/sm90/matmul-with-tma-v4.py)
-- Example metadata: [examples/runner/v3.8.0/llir/sm90/matmul_kernel_make_tensor_desciptor.json](./examples/runner/v3.8.0/llir/sm90/matmul_kernel_make_tensor_desciptor.json)
+- LLIR example: [examples/runner/v3.8.0/llir/sm120/matmul-with-tma-v4.py](./examples/runner/v3.8.0/llir/sm120/matmul-with-tma-v4.py)
+- PTX example: [examples/runner/v3.8.0/ptx/sm120/matmul-with-tma-v4.py](./examples/runner/v3.8.0/ptx/sm120/matmul-with-tma-v4.py)
+- cubin example: [examples/runner/v3.8.0/cubin/sm120/matmul-with-tma-v4.py](./examples/runner/v3.8.0/cubin/sm120/matmul-with-tma-v4.py)
+- Example metadata: [examples/runner/v3.8.0/llir/sm120/matmul_kernel_make_tensor_desciptor.json](./examples/runner/v3.8.0/llir/sm120/matmul_kernel_make_tensor_desciptor.json)
 
 ### 5. Gluon Runner
 
@@ -182,8 +182,8 @@ Representative commands:
 
 ```shell
 python examples/runner/python/triton/matmul-with-tma-v4.py
-python examples/runner/v3.8.0/ttgir/sm90/matmul-with-tma-v4.py
-python examples/runner/v3.8.0/cubin/sm90/matmul-with-tma-v4.py
+python examples/runner/v3.8.0/ttgir/sm120/matmul-with-tma-v4.py
+python examples/runner/v3.8.0/cubin/sm120/matmul-with-tma-v4.py
 python examples/runner/amd/v3.6.0/hsaco/matmul.py
 ```
 
