@@ -16,6 +16,7 @@ from .version import (
     is_triton_v3_5,
     is_triton_v3_7,
     is_triton_v3_6,
+    is_triton_v3_8,
     triton_version,
     uni_triton_version,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "is_triton_v3_5",
     "is_triton_v3_7",
     "is_triton_v3_6",
+    "is_triton_v3_8",
     "triton_key",
     "triton_version",
     "uni_triton_version",

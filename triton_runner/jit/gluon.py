@@ -1,5 +1,6 @@
 from .versions import (
     RunnerJITFunction,
+    RunnerJITFunctionV3_8_0,
     RunnerJITFunctionV3_7_0,
     RunnerJITFunctionV3_4_0,
     RunnerJITFunctionV3_5_0,
@@ -26,6 +27,7 @@ def make_gluon_runner(base_cls):
     GluonRunner.__name__ = base_cls.__name__.replace("RunnerJIT", "RunnerGluonJIT")
     return GluonRunner
 
+RunnerGluonJITFunctionV3_8_0 = make_gluon_runner(RunnerJITFunctionV3_8_0[T])
 RunnerGluonJITFunctionV3_7_0 = make_gluon_runner(RunnerJITFunctionV3_7_0[T])
 RunnerGluonJITFunctionV3_6_0 = make_gluon_runner(RunnerJITFunctionV3_6_0[T])
 RunnerGluonJITFunctionV3_5_0 = make_gluon_runner(RunnerJITFunctionV3_5_0[T])
@@ -63,7 +65,7 @@ def jit(
 
     def decorator(fn: T) -> JITFunction[T]:
         assert callable(fn)
-        from ..compat.version import is_triton_v3_7, is_triton_v3_6, is_triton_v3_5, is_triton_v3_4, triton_version
+        from ..compat.version import is_triton_v3_8, is_triton_v3_7, is_triton_v3_6, is_triton_v3_5, is_triton_v3_4, triton_version
 
         kwargs = {
             "fn": fn,
@@ -77,6 +79,7 @@ def jit(
         }
 
         dispatch_map = [
+            (is_triton_v3_8, RunnerGluonJITFunctionV3_8_0),
             (is_triton_v3_7, RunnerGluonJITFunctionV3_7_0),
             (is_triton_v3_6, RunnerGluonJITFunctionV3_6_0),
             (is_triton_v3_5, RunnerGluonJITFunctionV3_5_0),

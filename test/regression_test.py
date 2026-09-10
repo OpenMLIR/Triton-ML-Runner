@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 # All supported versions. 3.3.x uses 3.3.1, 3.5.x uses 3.5.1.
-ALL_VERSIONS = ["3.7.0", "3.6.0", "3.5.1", "3.4.0", "3.3.1", "3.2.0", "3.1.0", "3.0.0"]
+ALL_VERSIONS = ["3.8.0", "3.7.0", "3.6.0", "3.5.1", "3.4.0", "3.3.1", "3.2.0", "3.1.0", "3.0.0"]
 
 DEFAULT_QUICK_DUMP_SAMPLE_SIZE = 5
 DEFAULT_QUICK_DUMP_SEED = 20260417
