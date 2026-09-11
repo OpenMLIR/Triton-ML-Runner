@@ -2,7 +2,7 @@ from .triton import get_triton_cache_dir, triton_key
 from .version import (
     is_disable_multithreading,
     is_support_version,
-    is_tlx,
+    is_tlx_v3_7_4,
     is_triton_geq_v3_3,
     is_triton_geq_v3_4,
     is_triton_geq_v3_5,
@@ -25,7 +25,7 @@ __all__ = [
     "get_triton_cache_dir",
     "is_disable_multithreading",
     "is_support_version",
-    "is_tlx",
+    "is_tlx_v3_7_4",
     "is_triton_geq_v3_3",
     "is_triton_geq_v3_4",
     "is_triton_geq_v3_5",

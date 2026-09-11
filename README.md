@@ -92,7 +92,7 @@ flowchart LR
     classDef unsupported fill:#F5B7B1,stroke:#C0392B,stroke-width:2px,color:#000000;
 ```
 
-[TLX](https://github.com/facebookexperimental/triton) support is available for commit [9a7a23d](https://github.com/facebookexperimental/triton/commit/9a7a23d0cfa4ed4b37eb9b177b0e36beb254f9e6) in [examples/runner/tlx/README.md](./examples/runner/tlx/README.md).
+[TLX](https://github.com/facebookexperimental/triton) support is available for the [fbtriton v3.7.4](https://pypi.org/project/fbtriton/3.7.4/) release (`pip install fbtriton==3.7.4`, commit [7632ef2](https://github.com/facebookexperimental/triton/commit/7632ef23c8f4667d659e19820d39d80f613fbed1)) in [examples/runner/tlx/README.md](./examples/runner/tlx/README.md).
 
 ### 1. Python Runner
 

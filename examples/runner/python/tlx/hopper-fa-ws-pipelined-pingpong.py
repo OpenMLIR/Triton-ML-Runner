@@ -33,7 +33,7 @@ def _host_descriptor_pre_hook(nargs):
 
 configs = [
     triton.Config({'BLOCK_M': 128, 'BLOCK_N': 128, 'NUM_BUFFERS': 2, 'NUM_MMA_WARPS': 8, 'NUM_MMA_GROUPS': 2},
-                  num_stages=0, num_warps=4, pre_hook=_host_descriptor_pre_hook),
+                  num_stages=1, num_warps=4, pre_hook=_host_descriptor_pre_hook),
 ]
 
 
@@ -302,7 +302,7 @@ attention = _attention.apply
 @pytest.mark.parametrize("provider", ["triton-fp16"])
 @pytest.mark.skipif(
     not is_cuda() or torch.cuda.get_device_capability()[0] != 9,
-    reason="Requires Hopper GPU",
+    reason="Requires Hopper GPU (wgmma); for sm120 see blackwell-sm120-fa-ws.py",
 )
 def test_op(Z, H, N_CTX, HEAD_DIM, mode, provider, dtype=torch.float16):
     if mode == "bwd":

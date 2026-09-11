@@ -11,6 +11,7 @@ import triton
 import triton_runner
 
 from triton_runner.compat.version import (
+    is_tlx_v3_7_4,
     is_triton_geq_v3_3,
     triton_version,
     uni_triton_version,
@@ -36,9 +37,12 @@ def dedupe_keep_order(lines):
 
 def collect_commands(capability, quick, dump_sample_size, dump_seed):
     pattern = re.compile(rf"### sm{capability}.*?shell(.*?)```", re.DOTALL)
-    runner_file_path = os.path.join("examples", "runner", f"v{uni_triton_version}", "README.md")
+    if is_tlx_v3_7_4:
+        runner_file_path = os.path.join("examples", "runner", "tlx", "README.md")
+    else:
+        runner_file_path = os.path.join("examples", "runner", f"v{uni_triton_version}", "README.md")
     match = pattern.search(get_content(runner_file_path))
-    _triton_ver_tuple = tuple(int(x) for x in triton_version.split("."))
+    _triton_ver_tuple = tuple(int(x) for x in triton_version.split("+")[0].split("."))
     if not match or (capability == 120 and _triton_ver_tuple < (3, 3, 1)):
         return None, None
 
@@ -58,6 +62,13 @@ def collect_commands(capability, quick, dump_sample_size, dump_seed):
         for m in generic_shell_block.finditer(get_content(debug_file_path)):
             dump_lines.extend(get_lines(m))
         dump_lines = [cmd for cmd in dump_lines if "06-attention" not in cmd or capability >= 80]
+        if is_tlx_v3_7_4:
+            # fbtriton's make_ttgir fails to legalize python-level dump instrumentation
+            # in kernels with loops; IR-level (ttir/ttgir) dumps keep working
+            if any("/dump/python/" in cmd for cmd in dump_lines):
+                triton_runner.color_print.yellow_print(
+                    "fbtriton v3.7.4: skipping python-level dump commands (fork compiler limitation)")
+            dump_lines = [cmd for cmd in dump_lines if "/dump/python/" not in cmd]
         if quick:
             rng = random.Random(dump_seed)
             dump_lines = rng.sample(dump_lines, min(dump_sample_size, len(dump_lines)))
