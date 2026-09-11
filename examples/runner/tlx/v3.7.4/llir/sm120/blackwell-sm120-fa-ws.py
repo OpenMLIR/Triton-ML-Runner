@@ -24,7 +24,7 @@ DEVICE = triton_runner.torch_utils.get_active_torch_device()
 
 
 @triton.jit
-def _fa_ws_sm120(sm_scale, M, desc_q, desc_k, desc_v, desc_o, ZH, N_CTX,
+def _fa_ws_sm120(sm_scale, M, desc_q, desc_k, desc_v, O, ZH, N_CTX,
                  HEAD_DIM: tl.constexpr, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr):
     # shared-memory staging: q stays resident, k/v double-buffered
     q_tile = tlx.local_alloc((BLOCK_M, HEAD_DIM), tlx.dtype_of(desc_q), 1)
@@ -81,6 +81,9 @@ def _fa_ws_sm120(sm_scale, M, desc_q, desc_k, desc_v, desc_o, ZH, N_CTX,
                 k = tlx.local_load(k_tiles[buf])
                 k_t = tl.trans(k)
                 qk = tl.dot(q, k_t, out_dtype=tl.float32) * qk_scale
+                # tail N block: TMA zero-fills OOB K rows, keep them out of the softmax
+                offs_n = acc_cnt * BLOCK_N + tl.arange(0, BLOCK_N)
+                qk = tl.where(offs_n[None, :] < N_CTX, qk, float("-inf"))
                 m_new = tl.maximum(m_i, tl.max(qk, 1))
                 alpha = tl.math.exp2(m_i - m_new)
                 p = tl.math.exp2(qk - m_new[:, None])
@@ -93,10 +96,13 @@ def _fa_ws_sm120(sm_scale, M, desc_q, desc_k, desc_v, desc_o, ZH, N_CTX,
                 m_i = m_new
                 acc_cnt += 1
 
-            # epilogue
-            acc = acc / l_i[:, None]
-            tl.store(M + off_hz * N_CTX + offs_m, m_i + tl.math.log2(l_i))
-            desc_o.store([off_hz * N_CTX + start_m * BLOCK_M, 0], acc.to(tlx.dtype_of(desc_o)))
+            # epilogue: in the flattened [Z*H, N_CTX] layout a tail M block spills into
+            # the next head's rows, which a TMA box cannot mask — use masked stores
+            offs_d = tl.arange(0, HEAD_DIM)
+            out_ptrs = O + (off_hz * N_CTX + offs_m)[:, None] * HEAD_DIM + offs_d[None, :]
+            tl.store(out_ptrs, (acc / l_i[:, None]).to(tlx.dtype_of(desc_q)),
+                     mask=offs_m[:, None] < N_CTX)
+            tl.store(M + off_hz * N_CTX + offs_m, m_i + tl.math.log2(l_i), mask=offs_m < N_CTX)
 
 
 def attention(q, k, v, sm_scale):
@@ -114,20 +120,17 @@ def attention(q, k, v, sm_scale):
     desc_q = TensorDescriptor(q, shape=[y_dim, HEAD_DIM], strides=[HEAD_DIM, 1], block_shape=dummy)
     desc_k = TensorDescriptor(k, shape=[y_dim, HEAD_DIM], strides=[HEAD_DIM, 1], block_shape=dummy)
     desc_v = TensorDescriptor(v, shape=[y_dim, HEAD_DIM], strides=[HEAD_DIM, 1], block_shape=dummy)
-    desc_o = TensorDescriptor(o, shape=[y_dim, HEAD_DIM], strides=[HEAD_DIM, 1], block_shape=dummy)
-
     BLOCK_M, BLOCK_N = 64, 64
     desc_q.block_shape = [BLOCK_M, HEAD_DIM]
     desc_k.block_shape = [BLOCK_N, HEAD_DIM]
     desc_v.block_shape = [BLOCK_N, HEAD_DIM]
-    desc_o.block_shape = [BLOCK_M, HEAD_DIM]
 
     def grid(META):
         return (triton.cdiv(N_CTX, BLOCK_M), Z * H, 1)
 
     _fa_ws_sm120[grid](
         sm_scale, M,
-        desc_q, desc_k, desc_v, desc_o,
+        desc_q, desc_k, desc_v, o,
         Z * H, N_CTX,
         HEAD_DIM=HEAD_DIM, BLOCK_M=BLOCK_M, BLOCK_N=BLOCK_N,
         num_warps=4, num_stages=1,

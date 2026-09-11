@@ -62,6 +62,8 @@ class MetadataMixin:
                 json_path = os.path.join(kwargs[source_dir_type], f"{self.__name__}.json")
                 if os.path.exists(json_path):
                     metadata_json = json.loads(Path(json_path).read_text())
+            elif source_dir_type == "ttgir_src":
+                metadata_json = kwargs.get("metadata_json") or {}
             elif source_dir_type in METADATA_INLINE_SRC_TYPES:
                 metadata_json = kwargs.get("metadata_json") or {}
                 if not metadata_json:
